@@ -82,9 +82,6 @@ int main(int argc,char *argv[]){
     circulabuffer->stop =false;
 
     while (!quit && num_solutions<=limit ) {
-        quit=1;
-        break;
-
         if(sem_wait(sem_used)==-1){
             if(errno ==EINTR) continue;
             usage("error in semaphore wating (supervisor)");
@@ -105,7 +102,7 @@ int main(int argc,char *argv[]){
             usage("error in semaphore posting (supervisor)");
         }
     
-        if(solution->numRemovedEdges < best_solutions->numRemovedEdges){
+        /*if(solution->numRemovedEdges < best_solutions->numRemovedEdges){
             best_solutions=solution;
             fprintf(stdout,"Solution with %d edges: %s",best_solutions->numRemovedEdges, best_solutions->removedEdges);
         }
@@ -113,12 +110,13 @@ int main(int argc,char *argv[]){
             fprintf(stdout,"The graph is 3-colorable!");
             quit=1;
         }
+        */
         num_solutions++;
     }
     circulabuffer->stop =true;
 
     if(quit!=1){
-        fprintf(stdout,"The graph might not be 3-colorable,\nbest solution removes %d edges.",best_solutions->numRemovedEdges);
+       //S fprintf(stdout,"The graph might not be 3-colorable,\nbest solution removes %d edges.",best_solutions->numRemovedEdges);
     }
 
 

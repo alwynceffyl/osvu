@@ -30,10 +30,13 @@ typedef enum COLOUR {
 
 #define LEN (32)
 
+typedef struct node{
+  colour_t mycolour;
+} node_t;
 
 typedef struct solution {
-    unsigned int numRemovedEdges;
-    unsigned char *removedEdges;
+    node_t node_from;
+    node_t node_to;
 } solution_t;
 
 
@@ -45,3 +48,4 @@ typedef struct circulabuffer {
 
 void handle_signal(int signal);
 void usage(char* errormsg);
+char* printedges(solution_t solution, int* n);
