@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
 
     
 
-    int shmfd = shm_open(SHM_NAME, O_RDWR, 0600);
+    int shmfd = shm_open(SHM_NAME, O_RDWR | O_CREAT, 0600);
     if(shmfd == -1){
         perror("error in opening shared memory");
         exit(EXIT_FAILURE);
@@ -59,9 +59,9 @@ int main(int argc, char *argv[]) {
     }
  
 
-    sem_t *sem_free = sem_open(SEM_FREE, O_CREAT , 0600, LEN);
-    sem_t *sem_used = sem_open(SEM_USED, O_CREAT , 0600, 0);
-    sem_t *sem_generator = sem_open(SEM_GENERATOR, O_CREAT , 0600, 1);
+    sem_t *sem_free = sem_open(SEM_FREE, O_CREAT| O_EXCL , 0600, LEN);
+    sem_t *sem_used = sem_open(SEM_USED, O_CREAT | O_EXCL, 0600, 0);
+    sem_t *sem_generator = sem_open(SEM_GENERATOR, O_CREAT | O_EXCL, 0600, 1);
 
 
     if (sem_free == SEM_FAILED || sem_used == SEM_FAILED || sem_generator == SEM_FAILED) {
@@ -102,6 +102,7 @@ int main(int argc, char *argv[]) {
             exit(EXIT_FAILURE);
             break;
         }
+        free(solution);
     }
 
 
