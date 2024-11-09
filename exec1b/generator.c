@@ -105,6 +105,8 @@ int main(int argc, char *argv[]) {
     }
 
 
+
+    /* CLEAN UP */
     if(munmap(circulabuffer, sizeof(circulabuffer_t))==-1){
         perror("error in unmapping memory");
         exit(EXIT_FAILURE);
@@ -117,6 +119,11 @@ int main(int argc, char *argv[]) {
 
     if(sem_close(sem_free)==-1 || sem_close(sem_used)==-1 || sem_close(sem_generator)==-1){
         perror("error in closing semaphores");
+        exit(EXIT_FAILURE);
+    }
+
+    if(quit){
+        fprintf(stderr, "a signal killed the generator");
         exit(EXIT_FAILURE);
     }
 

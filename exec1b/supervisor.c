@@ -135,6 +135,8 @@ int main(int argc,char *argv[]){
     }
 
 
+
+    /* CLEAN UP */
     if(munmap(circulabuffer, sizeof(circulabuffer_t))==-1){
         perror("error in unmapping memory");
         exit(EXIT_FAILURE);
@@ -156,6 +158,13 @@ int main(int argc,char *argv[]){
     }
     if(sem_unlink(SEM_FREE)==-1 || sem_unlink(SEM_USED)==-1 || sem_unlink(SEM_GENERATOR)==-1){
         perror("error in unlinking semaphores");
+        exit(EXIT_FAILURE);
+    }
+
+
+    
+    if(quit){
+        fprintf(stderr, "a signal killed the supervisor");
         exit(EXIT_FAILURE);
     }
     
