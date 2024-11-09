@@ -84,9 +84,8 @@ int main(int argc,char *argv[]){
         exit(EXIT_FAILURE);
     }
 
-    //delay?
-    sleep(delay);
     circulabuffer->stop =false;
+    sleep(delay);
 
     while (!quit && num_solutions<=limit ) {
 
@@ -162,7 +161,7 @@ int main(int argc,char *argv[]){
     }
 
 
-    
+
     if(quit){
         fprintf(stderr, "a signal killed the supervisor");
         exit(EXIT_FAILURE);
