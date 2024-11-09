@@ -18,7 +18,6 @@ int main(int argc,char *argv[]){
     edgelist_t *best_solutions;
     unsigned int read_pos;
 
-
     while((opt=getopt(argc, argv, "n:w:"))!=-1){
         switch(opt){
         case 'n':
@@ -114,7 +113,8 @@ int main(int argc,char *argv[]){
             exit(EXIT_FAILURE);
             break;
         }
-    
+
+        if(num_solutions==0) best_solutions=solution;
         if(solution->size < best_solutions->size){
             best_solutions=solution;
             fprintf(stdout,"Solution with %d edges: %s",best_solutions->size);
@@ -159,7 +159,6 @@ int main(int argc,char *argv[]){
         perror("error in unlinking semaphores");
         exit(EXIT_FAILURE);
     }
-
 
 
     if(quit){

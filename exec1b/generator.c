@@ -106,7 +106,6 @@ int main(int argc, char *argv[]) {
     }
 
 
-
     /* CLEAN UP */
     if(munmap(circulabuffer, sizeof(circulabuffer_t))==-1){
         perror("error in unmapping memory");
@@ -199,6 +198,8 @@ edgelist_t* colouring(edges_t params[], int size){
         if(params[i].node_from.colour==params[i].node_to.colour){
             writeToBuffer->list[counter].node_from=params[i].node_from;
             writeToBuffer->list[counter].node_to= params[i].node_to;
+            printf("from node:=%d, to node :=%d\n", params[i].node_from.value, params[i].node_to.value);
+
             counter++;
         }
     }

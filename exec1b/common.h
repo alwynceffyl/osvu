@@ -28,7 +28,8 @@ typedef enum COLOUR {
 } colour_t;
 
 
-#define LEN (32)
+#define LEN 32
+#define MAX_EDGES 8
 
 typedef struct node{
   colour_t colour;
@@ -42,12 +43,12 @@ typedef struct edges {
 
 typedef struct edgelist{
     int size;
-    edges_t list[];
+    edges_t list[MAX_EDGES];
 }edgelist_t;
 
 typedef struct circulabuffer {
-    edgelist_t* solution[LEN];
     bool stop;
+    edgelist_t* solution[LEN];
 } circulabuffer_t;
 
 
