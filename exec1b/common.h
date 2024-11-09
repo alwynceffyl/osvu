@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <limits.h> //für INT_MAX
-
+#include <time.h> //für srand
 /* für Shared Memory */
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -31,21 +31,27 @@ typedef enum COLOUR {
 #define LEN (32)
 
 typedef struct node{
-  colour_t mycolour;
+  colour_t colour;
+  int value;
 } node_t;
 
-typedef struct solution {
+typedef struct edges {
     node_t node_from;
     node_t node_to;
-} solution_t;
+} edges_t;
 
+typedef struct edgelist{
+    int size;
+    edges_t list[];
+}edgelist_t;
 
 typedef struct circulabuffer {
-    solution_t solution[LEN];
+    edgelist_t* solution[LEN];
     bool stop;
 } circulabuffer_t;
 
 
 void handle_signal(int signal);
 void usage(char* errormsg);
-char* printedges(solution_t solution, int* n);
+void printEdges(edgelist_t* solution);
+edgelist_t* colouring(edges_t *params, int size);

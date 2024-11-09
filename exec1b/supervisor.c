@@ -13,9 +13,9 @@ int main(int argc,char *argv[]){
     myprog=argv[0];
     int opt;
     int limit=INT_MAX, delay=0;
-    int opt_n=0, opt_w;
+    int opt_n=0, opt_w=0;
     int num_solutions=0;
-    solution_t *best_solutions;
+    edgelist_t *best_solutions;
     unsigned int read_pos;
 
 
@@ -45,36 +45,43 @@ int main(int argc,char *argv[]){
 
     int shmfd = shm_open(SHM_NAME, O_RDWR| O_CREAT, 0600);
     if(shmfd == -1){
-        usage("error in opening shared memory");
+        perror("error in opening shared memory");
+        exit(EXIT_FAILURE);
     } 
 
     if(ftruncate(shmfd, sizeof(circulabuffer_t))<0){
-        usage("error in sizing memory ");
+        perror("error in sizing memory ");
+        exit(EXIT_FAILURE);
     }
 
     circulabuffer_t *circulabuffer;
     circulabuffer=mmap(NULL, sizeof(*circulabuffer), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd, 0);
     if(circulabuffer==MAP_FAILED){
-        usage("error in mapping memory");
+        perror("error in mapping memory");
+        exit(EXIT_FAILURE);
     }
 
 
     struct sigaction sa = { .sa_handler = handle_signal };
     if(sigaction(SIGINT, &sa, NULL)==-1){  
-        usage("error in signal handler action");
+        perror("error in signal handler action");
+        exit(EXIT_FAILURE);
     }
 
     if(sigaction(SIGTERM, &sa, NULL)==-1){  
-        usage("error in signal handler action");
+        perror("error in signal handler action");
+        exit(EXIT_FAILURE);
     }
  
 
-    sem_t *sem_free = sem_open(SEM_FREE, O_CREAT | O_EXCL, 0600, LEN);
-    sem_t *sem_used = sem_open(SEM_USED, O_CREAT | O_EXCL, 0600, 0);
-    sem_t *sem_generator = sem_open(SEM_GENERATOR, O_CREAT | O_EXCL, 0600, 1);
+    sem_t *sem_free = sem_open(SEM_FREE, O_CREAT , 0600, LEN);
+    sem_t *sem_used = sem_open(SEM_USED, O_CREAT , 0600, 0);
+    sem_t *sem_generator = sem_open(SEM_GENERATOR, O_CREAT, 0600, 1);
+
 
     if (sem_free == SEM_FAILED || sem_used == SEM_FAILED || sem_generator == SEM_FAILED) {
-        usage("error in opening semaphores");
+        perror("error in opening semaphores");
+        exit(EXIT_FAILURE);
     }
 
     //delay?
@@ -82,62 +89,74 @@ int main(int argc,char *argv[]){
     circulabuffer->stop =false;
 
     while (!quit && num_solutions<=limit ) {
+
         if(sem_wait(sem_used)==-1){
             if(errno ==EINTR) continue;
-            usage("error in semaphore wating (supervisor)");
+            perror("error in semaphore wating (supervisor)");
+            exit(EXIT_FAILURE);
+            break;
         }
 
         //also check for generator if someone wants to write the buffer
         if(sem_wait(sem_generator)==-1){
             if(errno ==EINTR) continue;
-            usage("error in semaphore wating (supervisor)");
+            perror("error in semaphore wating (supervisor)");
+            exit(EXIT_FAILURE);
+            break;
         }
 
         //Read solution from buffer
         //critical section;        
-        solution_t *solution = &circulabuffer->solution[read_pos];
+        edgelist_t *solution = circulabuffer->solution[read_pos];
         read_pos = (read_pos + 1) % LEN;
 
         if(sem_post(sem_free)==-1){
-            usage("error in semaphore posting (supervisor)");
+            perror("error in semaphore posting (supervisor)");
+            exit(EXIT_FAILURE);
+            break;
         }
     
-        /*if(solution->numRemovedEdges < best_solutions->numRemovedEdges){
+        if(solution->size < best_solutions->size){
             best_solutions=solution;
-            fprintf(stdout,"Solution with %d edges: %s",best_solutions->numRemovedEdges, best_solutions->removedEdges);
+            fprintf(stdout,"Solution with %d edges: %s",best_solutions->size);
+            printEdges(solution);
         }
-        if(solution->numRemovedEdges==0){
+        if(solution->size==0){
             fprintf(stdout,"The graph is 3-colorable!");
             quit=1;
         }
-        */
+    
         num_solutions++;
     }
-    circulabuffer->stop =true;
+    circulabuffer->stop=true;
 
     if(quit!=1){
-       //S fprintf(stdout,"The graph might not be 3-colorable,\nbest solution removes %d edges.",best_solutions->numRemovedEdges);
-    }
-
-
-    if(close(shmfd)==-1){
-        usage("error in closing shared memory fd");
+       fprintf(stdout,"The graph might not be 3-colorable,\nbest solution removes %d edges.",best_solutions->size);
     }
 
 
     if(munmap(circulabuffer, sizeof(circulabuffer_t))==-1){
-        usage("error in unmapping memory");
+        perror("error in unmapping memory");
+        exit(EXIT_FAILURE);
+    }
+
+    if(close(shmfd)==-1){
+        perror("error in closing shared memory fd");
+        exit(EXIT_FAILURE);
     }
 
     if(shm_unlink(SHM_NAME)==-1){
-        usage("error in unlinking shared memory");
+        perror("error in unlinking shared memory");
+        exit(EXIT_FAILURE);
     }
 
     if(sem_close(sem_free)==-1 || sem_close(sem_used)==-1 || sem_close(sem_generator)==-1){
-        usage("error in closing semaphores");
+        perror("error in closing semaphores");
+        exit(EXIT_FAILURE);
     }
     if(sem_unlink(SEM_FREE)==-1 || sem_unlink(SEM_USED)==-1 || sem_unlink(SEM_GENERATOR)==-1){
-        usage("error in unlinking semaphores");
+        perror("error in unlinking semaphores");
+        exit(EXIT_FAILURE);
     }
     
     exit(EXIT_SUCCESS);
@@ -145,6 +164,16 @@ int main(int argc,char *argv[]){
 
 
 void usage(char* errormsg) {
-    fprintf(stderr, "Usage: %s , errormessage: %s\n",myprog, errormsg);
+    fprintf(stderr, "Usage: %s, supervisor [-n limit] [-w delay], errormessage: %s\n",myprog, errormsg);
     exit(EXIT_FAILURE);
+}
+
+void printEdges(edgelist_t* solution){
+    char* edges[solution->size];
+
+    for(int i=0; i<solution->size; i++){
+        fprintf(stdout,"%ld-%ld ", solution->list[i].node_from.value,solution->list[i].node_from.value);              
+    }                                                 
+  
+    printf("\n");
 }
