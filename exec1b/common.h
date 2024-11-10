@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <assert.h>
 #include <limits.h> //für INT_MAX
 #include <time.h> //für srand
 /* für Shared Memory */
@@ -16,10 +17,16 @@
 #include <semaphore.h>
 
 
+
 #define SHM_NAME "/12207461_SHM"
 #define SEM_USED "/12207461_SEMUSED"
 #define SEM_FREE "/12207461_SEMFREE"
 #define SEM_GENERATOR "/12207461_SEMGENERATOR"
+
+
+#define PERMISSIONS 0600
+#define LEN 32
+#define MAX_EDGES 8
 
 typedef enum COLOUR {
   RED = 0,
@@ -28,8 +35,6 @@ typedef enum COLOUR {
 } colour_t;
 
 
-#define LEN 32
-#define MAX_EDGES 8
 
 typedef struct node{
   colour_t colour;
@@ -46,13 +51,16 @@ typedef struct edgelist{
     edges_t list[MAX_EDGES];
 }edgelist_t;
 
-typedef struct circulabuffer {
+typedef struct circularbuffer {
     bool stop;
-    edgelist_t* solution[LEN];
-} circulabuffer_t;
+    unsigned int read_pos;
+    unsigned int write_pos;
+    edgelist_t solution[LEN];
+} circularbuffer_t;
 
 
 void handle_signal(int signal);
 void usage(char* errormsg);
-void printEdges(edgelist_t* solution);
-edgelist_t* colouring(edges_t *params, int size);
+void printEdges(edgelist_t solution);
+edgelist_t colouring(edges_t *params, int size);
+

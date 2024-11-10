@@ -9,13 +9,14 @@ void handle_signal(int signal) {
 
 int main(int argc, char *argv[]) {
     
-    unsigned int write_pos=0;
     myprog=argv[0];
+
+
     if(argc < 2) usage("we need edges for the graph");
 
     edges_t params[argc-1];
+    
     for(int i=1; i<argc; i++){
-
         char* token = strtok(argv[i], "-");
         params[i-1].node_from.value= strtol(token, NULL , 0) > INT_MAX ? INT_MAX : strtol(token, NULL , 0) ;
         params[i-1].node_from.colour=-1;
@@ -28,86 +29,80 @@ int main(int argc, char *argv[]) {
 
     
 
-    int shmfd = shm_open(SHM_NAME, O_RDWR | O_CREAT, 0600);
+    int shmfd = shm_open(SHM_NAME, O_RDWR, PERMISSIONS);
     if(shmfd == -1){
         perror("error in opening shared memory");
         exit(EXIT_FAILURE);
     } 
 
-    if(ftruncate(shmfd, sizeof(circulabuffer_t))<0){
-        perror("error in sizing memory ");
-        exit(EXIT_FAILURE);
-    }
-
-    circulabuffer_t *circulabuffer;
-    circulabuffer=mmap(NULL, sizeof(*circulabuffer), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd, 0);
-    if(circulabuffer==MAP_FAILED){
+    circularbuffer_t *circularbuffer;
+    circularbuffer=mmap(NULL,sizeof(*circularbuffer), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd, 0);
+    if(circularbuffer==MAP_FAILED){
         perror("error in mapping memory");
         exit(EXIT_FAILURE);
     }
 
-
     struct sigaction sa = { .sa_handler = handle_signal };
-    if(sigaction(SIGINT, &sa, NULL)==-1){  
+    if(sigaction(SIGINT, &sa, NULL)==-1 || sigaction(SIGTERM, &sa, NULL)==-1){  
         perror("error in signal handler action");
         exit(EXIT_FAILURE);
     }
 
-    if(sigaction(SIGTERM, &sa, NULL)==-1){  
-        perror("error in signal handler action");
-        exit(EXIT_FAILURE);
-    }
- 
-
-    sem_t *sem_free = sem_open(SEM_FREE, O_CREAT| O_EXCL , 0600, LEN);
-    sem_t *sem_used = sem_open(SEM_USED, O_CREAT | O_EXCL, 0600, 0);
-    sem_t *sem_generator = sem_open(SEM_GENERATOR, O_CREAT | O_EXCL, 0600, 1);
+    sem_t *sem_free = sem_open(SEM_FREE, PERMISSIONS, LEN);
+    sem_t *sem_used = sem_open(SEM_USED,PERMISSIONS, 0);
+    sem_t *sem_generator = sem_open(SEM_GENERATOR, PERMISSIONS, 1);
 
 
     if (sem_free == SEM_FAILED || sem_used == SEM_FAILED || sem_generator == SEM_FAILED) {
         perror("error in opening semaphores");
         exit(EXIT_FAILURE);
     }
-    
-    while(!quit && !(circulabuffer->stop)){
 
-        if(sem_wait(sem_free)==-1){
-            if(errno ==EINTR) continue;
+    
+
+    circularbuffer->write_pos =0;
+
+    while(!quit && !(circularbuffer->stop)){
+
+        if(sem_wait(sem_free)==-1 && errno !=EINTR){
             perror("error in semaphore wating (generator)");
             exit(EXIT_FAILURE);
             break;
         }
+       
 
-        //also check for generator if someone wants to write the buffer
-        if(sem_wait(sem_generator)==-1){
-            if(errno ==EINTR) continue;
+        if(sem_wait(sem_generator)==-1 && errno != EINTR){
             perror("error in semaphore wating (generator)");
             exit(EXIT_FAILURE);
             break;
         }
 
         //Write solution from buffer
-        //critical section;        
-        edgelist_t *solution = colouring(params, argc-1);
-        circulabuffer->solution[write_pos] = solution;
-        write_pos = (write_pos + 1) % LEN;
+
+        edgelist_t solution=colouring(params, (argc-1));
+        if(solution.size < MAX_EDGES){
+            circularbuffer->solution[circularbuffer->write_pos]=colouring(params, (argc-1));
+            circularbuffer->write_pos=(circularbuffer->write_pos+1) % sizeof(circularbuffer);
+        }
+        else{
+            continue;
+        }
 
         if(sem_post(sem_generator)==-1){
             perror("error in semaphore posting (generator)");
             exit(EXIT_FAILURE);
             break;
-        }
+        }        
+
         if(sem_post(sem_used)==-1){
             perror("error in semaphore posting (generator)");
             exit(EXIT_FAILURE);
             break;
         }
-        free(solution);
     }
-
-
+    
     /* CLEAN UP */
-    if(munmap(circulabuffer, sizeof(circulabuffer_t))==-1){
+    if(munmap(circularbuffer, sizeof(*circularbuffer))==-1){
         perror("error in unmapping memory");
         exit(EXIT_FAILURE);
     }
@@ -122,10 +117,6 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    if(quit){
-        fprintf(stderr, "a signal killed the generator");
-        exit(EXIT_FAILURE);
-    }
 
     exit(EXIT_SUCCESS);
 }
@@ -136,23 +127,26 @@ void usage(char* errormsg) {
     exit(EXIT_FAILURE);
 }
 
-edgelist_t* colouring(edges_t params[], int size){
-    int nodesize=0;
+edgelist_t colouring(edges_t params[], int size){
+
+    srand((unsigned int)time(NULL));
+
+    for(int i=0; i<size; i++){
+        params[i].node_from.colour=-1;
+        params[i].node_to.colour=-1;
+    } 
 
 
     for(int i=0; i< size; i++){
         if(params[i].node_from.colour==-1 && params[i].node_to.colour==-1){
             params[i].node_from.colour=rand() % 3;
             params[i].node_to.colour=rand() % 3;
-            nodesize+=2;
         }   
         if(params[i].node_from.colour==-1){
             params[i].node_from.colour = rand() % 3;
-            nodesize++;
         }
         if(params[i].node_to.colour==-1){
             params[i].node_to.colour =  rand() % 3;
-            nodesize++;
         } 
 
         for(int j=i+1; j<size; j++){
@@ -169,12 +163,8 @@ edgelist_t* colouring(edges_t params[], int size){
                 params[j].node_from.colour=params[i].node_to.colour;
             }
         }
-        //printf("from node:=%d, to node :=%d\n", params[i].node_from.value, params[i].node_to.value);
-        //printf("from colour:=%d, to colour :=%d\n", params[i].node_from.colour, params[i].node_to.colour);
     }
  
-    srand((unsigned int)time(NULL));
-    //printf("distinctive nodes size:=%d\n",nodesize);
 
     int counter=0;
     for(int i=0; i < size; i++){
@@ -183,23 +173,15 @@ edgelist_t* colouring(edges_t params[], int size){
         }
     }
 
-    //printf("counter of removed edges:=%d\n", counter);
 
-    edgelist_t *writeToBuffer;
-    writeToBuffer=(edgelist_t *)malloc(counter* sizeof(edges_t)+sizeof(int));
-    if(writeToBuffer==NULL){
-        perror("couldnt allocate resources for edgelist for our buffer");
-    }
-
-    writeToBuffer->size=counter;
+    edgelist_t writeToBuffer;
+    writeToBuffer.size=counter;
 
     counter=0;
-    for(int i=0; i < size; i++){
+    for(int i=0; i < size && counter <= MAX_EDGES; i++){
         if(params[i].node_from.colour==params[i].node_to.colour){
-            writeToBuffer->list[counter].node_from=params[i].node_from;
-            writeToBuffer->list[counter].node_to= params[i].node_to;
-            printf("from node:=%d, to node :=%d\n", params[i].node_from.value, params[i].node_to.value);
-
+            writeToBuffer.list[counter].node_from=params[i].node_from;
+            writeToBuffer.list[counter].node_to= params[i].node_to;
             counter++;
         }
     }
