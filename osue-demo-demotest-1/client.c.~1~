@@ -60,35 +60,6 @@ void initialize_names(void) {
  * Hints: getopt(3)
  ************************************************************************/
 void parse_arguments(int argc, char *argv[], args_t *args) {
-    
-    int opt;
-    int opt_p;
-    char* password;
-    program_name=argv[0];
-    while((opt=getopt(argc, argv, "p:"))!=-1){
-        switch(opt){
-            case 'p':
-                password=optarg;
-                opt_p++;
-                break;
-            default:
-                usage("invalid option");
-                exit(EXIT_FAILURE);
-        }
-    }
-
-    if(opt_p!=1){
-        usage("invalid option");
-        exit(EXIT_FAILURE);
-    }
-
-
-    if(optind!=argc){
-        usage("invalid number of positional arguments");
-        exit(EXIT_FAILURE);
-    }
-    args->password=password;
-    //fprintf(stdout, "%s\n", args->password);
 }
 
 /*******************************************************************************
@@ -105,30 +76,6 @@ void parse_arguments(int argc, char *argv[], args_t *args) {
  * Hints: shm_overview(7), ftruncate(2), mmap(2), sem_overview(7)
  ******************************************************************************/
 void allocate_resources(void) {
-
-
-    shmfd=shm_open(SHM_NAME, O_RDWR, PERMISSIONS);
-    if(shmfd==-1){
-        error_exit("error in opening shared memory");
-    }
-    
-    if (ftruncate(shmfd, SHM_SIZE) == -1){
-        error_exit("error in truncating");
-    }
-
-    shmp= mmap(NULL,SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shmfd, 0);
-    if(shmp==MAP_FAILED){
-        error_exit("error in memory mapping");
-    }
-
-    sem_request=sem_open(SEM_NAME_REQUEST, 0);
-    sem_client=sem_open(SEM_NAME_CLIENT, 1);
-    sem_response=sem_open(SEM_NAME_RESPONSE,  0 );
-
-    if(sem_request==SEM_FAILED || sem_client==SEM_FAILED || sem_response == SEM_FAILED){
-        error_exit("error in opening semaphores");
-    }
-
 }
 
 /*******************************************************************************
@@ -160,27 +107,6 @@ void allocate_resources(void) {
  *
  ******************************************************************************/
 void process_password(const char *password, char *hash) {
-
-    if(sem_wait(sem_client)==-1 && errno != EINTR){
-        error_exit("error in waiting semaphore client");
-    }
-    
-    strncpy(shmp, password ,SHM_SIZE);
-
-    if(sem_post(sem_request)==-1){
-        error_exit("error in posting semaphore client");
-    }
-
-
-    if(sem_wait(sem_response)==-1 && errno != EINTR){
-        error_exit("error in waiting semaphore client");
-    }
-
-    strncpy(hash, shmp ,SHM_SIZE);
-
-    if(sem_post(sem_client)==-1){
-        error_exit("error in posting semaphore client");
-    }
 }
 
 int main(int argc, char *argv[]) {
@@ -191,7 +117,7 @@ int main(int argc, char *argv[]) {
 
 
     parse_arguments(argc, argv, &args);
-    //DEMO_parse_arguments(argc, argv, &args);
+    // DEMO_parse_arguments(argc, argv, &args);
 
     allocate_resources();
     // DEMO_allocate_resources();
