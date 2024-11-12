@@ -1,16 +1,14 @@
 CC = gcc
-FLAGS= -std=gnu99 -pedantic -Wall -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_SVID_SOURCE -D_POSIX_C_SOURCE=200809L -g
-LDFLAGS = -pthread -lrt
-
+FLAGS= -std=c99 -pedantic -Wall -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_SVID_SOURCE -D_POSIX_C_SOURCE=200809L -g
 .PHONY: all clean zip configd created
 
 all: supervisor generator
 
 generator: generator.o 
-	$(CC)  $(FLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC)  $(FLAGS) -o $@ $^
 
 supervisor: supervisor.o
-	$(CC)  $(FLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC)  $(FLAGS) -o $@ $^
 	
 %.o: %.c %.h
 	$(CC) $(FLAGS) -c -o $@ $<
