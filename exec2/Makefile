@@ -16,7 +16,7 @@ clean:
 	rm -rf *.o forksort ex2.tar.gz html/ latex/ forksortd
 
 zip:
-	tar -cvzf ex2b.tar.gz Makefile *.c *h
+	tar -cvzf ex2.tar.gz Makefile *.c *h
 
 configd:
 	doxygen -g forksortd  
