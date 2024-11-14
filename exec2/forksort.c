@@ -2,22 +2,205 @@
 #include "forksort.h"
 
 
+
+/**
+ * @file forksort.c
+ * @author Phillip Sassmann
+ * @date 13.11.2024
+ *
+ * @brief This file contains functions for reading input, sorting them via forksort
+ */
+
+
 char *myprog;
 
 
 int main(int argc, char **argv){
     myprog=argv[0];
-    unsigned int count;
-    char **line = readInput(&count);
-    mergeSort(line, 0, count-1);
-    printArr(line, count);
-    freeMemory(line, count);
+    
+    mydata_t data;
+    data.lines = readInput(stdin, &data.counter);
+    if(data.counter==1){
+        fprintf(stdout, "%s\n", data.lines[0]);
+        free(data.lines); 
+        exit(EXIT_SUCCESS);
+    }    
+
+
+    // SPLIT DATA 
+    mydata_t dataLeft, dataRight;
+    dataLeft.counter=data.counter/2;
+    dataRight.counter=data.counter -  data.counter/2;
+    dataLeft.lines=(char **) malloc(sizeof(char*)  * (dataLeft.counter));
+    dataRight.lines=(char **) malloc(sizeof(char*) * (dataRight.counter));
+
+    if (dataLeft.lines == NULL || dataRight.lines == NULL) {
+        perror("memory allocation failed for splitting data");
+        free(data.lines);
+        exit(EXIT_FAILURE);
+    }
+    
+    for(int i=0; i<dataLeft.counter;i++){
+        dataLeft.lines[i]=data.lines[i];
+    }
+
+    for(int i=0; i<dataRight.counter;i++){
+        dataRight.lines[i]=data.lines[data.counter/2+i];
+    }
+
+    
+
+    int pipeLeftIn[2], pipeLeftOut[2];
+    int pipeRightIn[2], pipeRightOut[2];
+    if (pipe(pipeLeftIn) == -1 || pipe(pipeLeftOut) == -1 ||
+        pipe(pipeRightIn) == -1 || pipe(pipeRightOut) == -1) {
+        perror("error creating pipes");
+        free(dataLeft.lines);
+        free(dataRight.lines);
+        free(data.lines);
+        exit(EXIT_FAILURE);
+    }
+
+    pid_t leftChild=fork();
+    if(leftChild==-1){
+        fprintf(stderr, "error in forking left child");
+        free(dataLeft.lines);
+        free(dataRight.lines);
+        free(data.lines);
+        exit(EXIT_FAILURE);
+    }
+
+    if(leftChild==0){
+        dup2(pipeLeftIn[0], STDIN_FILENO);          // Redirect stdin to pipe
+        dup2(pipeLeftOut[1], STDOUT_FILENO);        // Redirect stdout to pipe
+        close(pipeLeftIn[1]);
+        close(pipeLeftOut[0]);
+        close(pipeRightIn[0]);
+        close(pipeRightIn[1]);
+        close(pipeRightOut[0]);
+        close(pipeRightOut[1]);
+
+        // Execute forksort recursively
+        execlp(argv[0], argv[0], NULL);
+
+        // If execlp fails
+        perror("execlp failed");
+        free(dataLeft.lines);
+        free(dataRight.lines);
+        free(data.lines);
+        exit(EXIT_FAILURE);
+    }
+    
+    pid_t rightChild=fork();
+    if(rightChild==-1){
+        fprintf(stderr, "error in forking right child");
+        free(dataLeft.lines);
+        free(dataRight.lines);
+        free(data.lines);
+        exit(EXIT_FAILURE);
+    }
+
+    if(rightChild==0){
+        dup2(pipeRightIn[0], STDIN_FILENO);         // Redirect stdin to pipe
+        dup2(pipeRightOut[1], STDOUT_FILENO);       // Redirect stdout to pipe
+        close(pipeRightIn[1]);
+        close(pipeRightOut[0]);
+        close(pipeLeftIn[0]);
+        close(pipeLeftIn[1]);
+        close(pipeLeftOut[0]);
+        close(pipeLeftOut[1]);
+
+        // Execute forksort recursively
+        execlp(argv[0], argv[0], NULL);
+
+        // If execlp fails
+        perror("execlp failed");
+        free(dataLeft.lines);
+        free(dataRight.lines);
+        free(data.lines);
+        exit(EXIT_FAILURE);
+    }
+
+
+    close(pipeLeftIn[0]);
+    close(pipeLeftOut[1]);
+    close(pipeRightIn[0]);
+    close(pipeRightOut[1]);
+
+
+    FILE *leftIn = fdopen(pipeLeftIn[1], "w");
+    if (leftIn == NULL) {
+        perror("Error opening pipe for writing (left)");
+        free(dataLeft.lines);
+        free(dataRight.lines);
+        free(data.lines);
+        exit(EXIT_FAILURE);
+    }
+    for(int i=0; i< dataLeft.counter;i++){
+        fprintf(leftIn, "%s\n", dataLeft.lines[i]);
+    }
+    fclose(leftIn);
+
+    FILE *rightIn = fdopen(pipeRightIn[1], "w");
+    if (rightIn == NULL) {
+        perror("Error opening pipe for writing (right)");
+        free(dataLeft.lines);
+        free(dataRight.lines);
+        free(data.lines);
+        exit(EXIT_FAILURE);
+    }
+    for(int i=0; i< dataRight.counter;i++){
+        fprintf(rightIn, "%s\n", dataRight.lines[i]);
+    }
+    fclose(rightIn);
+
+    mydata_t sortedLeft, sortedRight;
+    FILE *leftOut = fdopen(pipeLeftOut[0], "r");
+    if (leftOut == NULL) {
+        perror("Error opening pipe for reading (left)");
+        free(dataLeft.lines);
+        free(dataRight.lines);
+        free(data.lines);
+        exit(EXIT_FAILURE);
+    }
+    sortedLeft.lines= readInput(leftOut, &sortedLeft.counter);
+    fclose(leftOut);
+
+    FILE *rightOut = fdopen(pipeRightOut[0], "r");
+    if (rightOut == NULL) {
+        perror("Error opening pipe for reading (right)");
+        free(sortedLeft.lines);
+        free(sortedRight.lines);
+        free(dataLeft.lines);
+        free(data.lines);
+        exit(EXIT_FAILURE);
+    }
+    sortedRight.lines= readInput(rightOut, &sortedRight.counter);
+    fclose(rightOut);
+
+    // Wait for both children to finish
+    int status;
+    waitpid(leftChild, &status, 0);
+    waitpid(rightChild, &status, 0);
+
+    // Merge the sorted results and print them
+    merge(stdout, sortedLeft.lines, sortedRight.lines, sortedLeft.counter, sortedRight.counter);
+    
+    close(pipeRightOut[0]);
+    close(pipeLeftOut[0]);
+    close(pipeLeftIn[1]);
+    close(pipeRightIn[1]);
+    free(sortedLeft.lines);
+    free(sortedRight.lines);
+    free(dataLeft.lines);
+    free(dataRight.lines);
+    free(data.lines);
     exit(EXIT_SUCCESS);
 }
 
 
-char** readInput(unsigned int *count){
-    FILE *input = stdin;
+char** readInput(FILE *dataInput,unsigned int *count){
+    FILE *input =dataInput ;
     char *line = NULL;
     size_t len = 0;
     ssize_t nread;
@@ -36,108 +219,61 @@ char** readInput(unsigned int *count){
             start *=2;
             arr =(char**) realloc(arr,  start* sizeof(char*));
             if (arr == NULL) {
-                freeMemory(arr, counter);
+                perror("failed to allocate memory");
+                free(arr);
                 exit(EXIT_FAILURE);
             }
         }
 
-        arr[counter] = (char *)malloc((nread+1) * sizeof(char));
+        arr[counter] = (char *)malloc((nread) * sizeof(char));
         if(arr[counter]==NULL){
             perror("failed to allocate memory");
-            freeMemory(arr, counter);
+            free(arr);
             exit(EXIT_FAILURE);
         }
         strncpy(arr[counter],line, nread);
-        arr[counter][nread]='\0';
+        arr[counter][nread-1]='\0';
         counter++;
     }
     free(line);
 
     arr = (char**)realloc(arr, counter * sizeof(char*));
     if (arr == NULL) {
-        perror("Final reallocation failed");
-        freeMemory(arr, counter);
+        perror("final reallocation failed");
+        free(arr);
         exit(EXIT_FAILURE);
     }
-   
-    *count=counter;
 
+    *count=counter;
     return arr;
 }
 
-void freeMemory(char** arr, unsigned count) {
-    for (unsigned i = 0; i < count; i++) {
-        free(arr[i]);
-    }
-    free(arr);
-}
 
 
-void merge(char** arr, int left, int mid, int right) {
+void merge(FILE* output, char** arr1, char** arr2, unsigned int counter1, unsigned int counter2) {
 
-    int i, j, k;
-    int n1 = mid - left + 1;
-    int n2 = right - mid;
+    int i=0, j=0;
 
-    // Create temporary arrays
-    char **leftArr= (char**) malloc(n1*sizeof(char*));
-    char **rightArr= (char**) malloc(n2*sizeof(char*));
-
-    // Copy data to temporary arrays
-    for (i = 0; i < n1; i++){
-        leftArr[i] = arr[left + i];
-    }
-
-    for (j = 0; j < n2; j++){
-        rightArr[j] = arr[mid + 1 + j];
-    }
-
-    // Merge the temporary arrays back into arr[left..right]
-    i = 0;
-    j = 0;
-    k = left;
-    while (i < n1 && j < n2) {
-        if (strcmp(leftArr[i], rightArr[j])<0) {
-            arr[k] = leftArr[i];
+    while (i < counter1 && j < counter2) {
+        if (strcmp(arr1[i], arr2[j])<0) {
+            fprintf(output, "%s\n", arr1[i]);
             i++;
         }
         else {
-            arr[k] = rightArr[j];
+            fprintf(output, "%s\n", arr2[j]);
             j++;
         }
-        k++;
     }
 
-    // Copy the remaining elements of leftArr[], if any
-    while (i < n1) {
-        arr[k] = leftArr[i];
+    // Copy the remaining elements of arr1[], if any
+    while (i < counter1) {
+        fprintf(output, "%s\n", arr1[i]);
         i++;
-        k++;
     }
 
-    // Copy the remaining elements of rightArr[], if any
-    while (j < n2) {
-        arr[k] = rightArr[j];
+    // Copy the remaining elements of arr2[], if any
+    while (j < counter2) {
+        fprintf(output, "%s\n", arr2[j]);
         j++;
-        k++;
-    }
-
-    free(rightArr);
-    free(leftArr);
-}
-
-void mergeSort(char** arr, int left, int right) {
-    if (left < right) {
-      
-        int mid = left + (right - left) / 2;
-        mergeSort(arr, left, mid);
-        mergeSort(arr, mid + 1, right);
-        merge(arr, left, mid, right);
-    }
-}
-
-void printArr(char **arr, int count){
-    for(int i=0; i< count; i++){
-        fprintf(stdout, "%s", arr[i]);
     }
 }
