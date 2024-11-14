@@ -17,8 +17,8 @@
 
 
 typedef struct mydata{
-  unsigned int counter;
-  char ** lines;
+    unsigned int counter;
+    char ** lines;
 } mydata_t;
 
 char** readInput(FILE *dataInput,unsigned int *count);
