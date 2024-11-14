@@ -1,7 +1,4 @@
-
 #include "forksort.h"
-
-
 
 /**
  * @file forksort.c
@@ -127,7 +124,6 @@ int main(int argc, char **argv){
     close(pipeRightIn[0]);
     close(pipeRightOut[1]);
 
-
     FILE *leftIn = fdopen(pipeLeftIn[1], "w");
     if (leftIn == NULL) {
         perror("Error opening pipe for writing (left)");
@@ -136,11 +132,7 @@ int main(int argc, char **argv){
         free(data.lines);
         exit(EXIT_FAILURE);
     }
-    for(int i=0; i< dataLeft.counter;i++){
-        fprintf(leftIn, "%s\n", dataLeft.lines[i]);
-    }
-    fclose(leftIn);
-
+   
     FILE *rightIn = fdopen(pipeRightIn[1], "w");
     if (rightIn == NULL) {
         perror("Error opening pipe for writing (right)");
@@ -149,13 +141,26 @@ int main(int argc, char **argv){
         free(data.lines);
         exit(EXIT_FAILURE);
     }
+
+    for(int i=0; i< dataLeft.counter;i++){
+        fprintf(leftIn, "%s\n", dataLeft.lines[i]);
+    }
+
     for(int i=0; i< dataRight.counter;i++){
         fprintf(rightIn, "%s\n", dataRight.lines[i]);
     }
+
+    free(dataLeft.lines);
+    free(dataRight.lines);
+    free(data.lines);
+
+    fclose(leftIn);
     fclose(rightIn);
 
     mydata_t sortedLeft, sortedRight;
     FILE *leftOut = fdopen(pipeLeftOut[0], "r");
+    FILE *rightOut = fdopen(pipeRightOut[0], "r");
+
     if (leftOut == NULL) {
         perror("Error opening pipe for reading (left)");
         free(dataLeft.lines);
@@ -163,10 +168,7 @@ int main(int argc, char **argv){
         free(data.lines);
         exit(EXIT_FAILURE);
     }
-    sortedLeft.lines= readInput(leftOut, &sortedLeft.counter);
-    fclose(leftOut);
-
-    FILE *rightOut = fdopen(pipeRightOut[0], "r");
+    
     if (rightOut == NULL) {
         perror("Error opening pipe for reading (right)");
         free(sortedLeft.lines);
@@ -175,14 +177,26 @@ int main(int argc, char **argv){
         free(data.lines);
         exit(EXIT_FAILURE);
     }
-    sortedRight.lines= readInput(rightOut, &sortedRight.counter);
-    fclose(rightOut);
 
     // Wait for both children to finish
     int status;
     waitpid(leftChild, &status, 0);
+    if (WEXITSTATUS(status) == EXIT_FAILURE) {
+        fprintf(stderr, "error in left child process.. \n");
+        exit(EXIT_FAILURE);
+    }
     waitpid(rightChild, &status, 0);
+    if (WEXITSTATUS(status) == EXIT_FAILURE) {
+        fprintf(stderr, "error in right child process.. \n");
+        exit(EXIT_FAILURE);
+    }
 
+    sortedLeft.lines= readInput(leftOut, &sortedLeft.counter);
+    sortedRight.lines= readInput(rightOut, &sortedRight.counter);
+    fclose(leftOut);
+    fclose(rightOut);
+
+   
     // Merge the sorted results and print them
     merge(stdout, sortedLeft.lines, sortedRight.lines, sortedLeft.counter, sortedRight.counter);
     
@@ -192,9 +206,6 @@ int main(int argc, char **argv){
     close(pipeRightIn[1]);
     free(sortedLeft.lines);
     free(sortedRight.lines);
-    free(dataLeft.lines);
-    free(dataRight.lines);
-    free(data.lines);
     exit(EXIT_SUCCESS);
 }
 
@@ -220,6 +231,9 @@ char** readInput(FILE *dataInput,unsigned int *count){
             arr =(char**) realloc(arr,  start* sizeof(char*));
             if (arr == NULL) {
                 perror("failed to allocate memory");
+                for(int i =0; i < counter; i++){
+                    free(arr[i]);
+                }
                 free(arr);
                 exit(EXIT_FAILURE);
             }
@@ -228,6 +242,9 @@ char** readInput(FILE *dataInput,unsigned int *count){
         arr[counter] = (char *)malloc((nread) * sizeof(char));
         if(arr[counter]==NULL){
             perror("failed to allocate memory");
+            for(int i =0; i < counter; i++){
+                free(arr[i]);
+            }
             free(arr);
             exit(EXIT_FAILURE);
         }
@@ -240,6 +257,9 @@ char** readInput(FILE *dataInput,unsigned int *count){
     arr = (char**)realloc(arr, counter * sizeof(char*));
     if (arr == NULL) {
         perror("final reallocation failed");
+        for(int i =0; i < counter; i++){
+            free(arr[i]);
+        }
         free(arr);
         exit(EXIT_FAILURE);
     }
