@@ -1,15 +1,24 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <ctype.h>
-#include <errno.h>
-#include <netdb.h>
-#include <fcntl.h>
-#include <stdbool.h>
+/**
+ * @file client.c
+ * @author 
+ * @brief HTTP-Client zur Verarbeitung von URLs und Abrufen von Ressourcen.
+ * @date 2024-12-22
+ */
+ 
+#include "client.h"
 
 char *myprog;
 
+
+/**
+ * @brief Analysiert eine URL und extrahiert Hostnamen, Dateipfad und Dateinamen.
+ * @details Die Funktion überprüft, ob die URL mit "http://" beginnt. Anschließend wird der Hostname,
+ * der Dateipfad und optional der Dateiname extrahiert.
+ * @param url Die zu analysierende URL (Eingabe).
+ * @param filepath Zeiger auf den extrahierten Dateipfad.
+ * @param filename Zeiger auf den extrahierten Dateinamen.
+ * @param hostname Zeiger auf den extrahierten Hostnamen.
+ */
 void parse_url(char *url, char **filepath, char **filename, char **hostname) {
 
     if (strncmp(url, "http://", 7) != 0) {
@@ -43,7 +52,11 @@ void parse_url(char *url, char **filepath, char **filename, char **hostname) {
     
 }
 
-
+/**
+ * @brief Überprüft, ob eine Zeichenkette leer oder nur aus Leerzeichen besteht.
+ * @param str Die zu überprüfende Zeichenkette.
+ * @return 1, wenn die Zeichenkette leer oder nur aus Leerzeichen besteht, sonst 0.
+ */
 int is_empty_or_spaces(const char *str) {
     if (str == NULL) {
         return 1;
@@ -57,6 +70,15 @@ int is_empty_or_spaces(const char *str) {
     return 1;
 }
 
+
+/**
+ * @brief Analysiert eine HTTP-Header-Zeile, um den Statuscode zu ermitteln.
+ * @details Der HTTP-Header wird in Protokoll und Statuscode zerlegt. Die Funktion validiert das
+ * Protokoll und gibt den Statuscode zurück.
+ * @param str Der zu analysierende HTTP-Header (Eingabe).
+ * @return 0, wenn der Statuscode 200 (OK) ist, 1 für andere Statuscodes, -1 bei Protokoll- oder
+ * Header-Fehlern.
+ */
 int parse_header(char *str) {
     char *protocol, *code, *endptr;
     long val;
@@ -79,11 +101,31 @@ int parse_header(char *str) {
     return val == 200 ? 0 : 1;
 }
 
+
+/**
+ * @brief Zeigt die Programmnutzung an und beendet das Programm.
+ * @details Diese Funktion gibt eine Fehlermeldung aus und beendet das Programm mit einem
+ * Fehlercode.
+ * @param errormsg Die anzuzeigende Fehlermeldung.
+ */
 static void usage(char *errormsg) {
     fprintf(stderr, "Usage: %s [-p PORT] [ -o FILE | -d DIR ] URL\nError: %s\n", myprog, errormsg);
     exit(EXIT_FAILURE);
 }
 
+
+
+/**
+ * @brief Analysiert die Argumente der Kommandozeile.
+ * @details Unterstützt Optionen für Portnummer, Ausgabedatei, Ausgabeverzeichnis und URL. 
+ * Die Funktion überprüft die Reihenfolge der Argumente und validiert die Eingaben.
+ * @param argc Anzahl der Argumente.
+ * @param argv Array der Argumente.
+ * @param port Zeiger auf den zu verwendenden Port.
+ * @param filename Zeiger auf die Datei, in die geschrieben werden soll.
+ * @param url Zeiger auf die URL, die verarbeitet werden soll.
+ * @param directory Zeiger auf das Ausgabeverzeichnis.
+ */
 void parse_arg(int argc, char *argv[], char **port, char **filename, char **url, char **directory) {
     int opt;
     int p_flag = 0, o_flag = 0, d_flag = 0;
@@ -125,8 +167,25 @@ void parse_arg(int argc, char *argv[], char **port, char **filename, char **url,
         usage("something is wrong");
     }
 
+    errno=0;
+    char *endptr; 
+    long val= strtol(*port, &endptr, 0);
+
+    if (errno != 0 || endptr==*port || *endptr!='\0' || val < 0 || val > 65535) {
+        perror("strtol");
+        exit(EXIT_FAILURE);
+    }
 }
 
+
+/**
+ * @brief Hauptfunktion des Programms.
+ * @details Die Hauptfunktion steuert den Ablauf des Programms. Sie analysiert die Argumente,
+ * stellt eine Verbindung zu einem HTTP-Server her, fordert Daten an und speichert die Antwort.
+ * @param argc Anzahl der Argumente.
+ * @param argv Array der Argumente.
+ * @return EXIT_SUCCESS bei erfolgreicher Ausführung, sonst ein Fehlercode.
+ */
 int main(int argc, char *argv[]) {
     myprog = argv[0];
     char *port = "80";
@@ -221,6 +280,8 @@ int main(int argc, char *argv[]) {
                 exit(3);
             }
 
+            free(temp);
+
         }
         if (!nonHeader && is_empty_or_spaces(line)) {
             nonHeader = true;
@@ -231,7 +292,7 @@ int main(int argc, char *argv[]) {
 
     }
     free(hostname);
-    free(filename);
+    //free(filename);
 
     free(line);
     fclose(sockfile);
