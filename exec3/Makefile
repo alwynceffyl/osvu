@@ -7,9 +7,9 @@ CC = gcc
 FLAGS= -std=gnu99 -pedantic -Wall -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_SVID_SOURCE -D_POSIX_C_SOURCE=200809L -g
 LDFLAGS = -pthread
 
-.PHONY: all clean zipClient zipServer
+.PHONY: all clean zipServer zipClient 
 
-all: client server
+all:  server client
 
 client: client.o 
 	$(CC)  $(FLAGS) -o $@ $^ $(LDFLAGS)

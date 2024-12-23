@@ -12,10 +12,7 @@
 #include <sys/stat.h>
 #include <time.h>
 
-
-
-void parse_arg(int argc, char *argv[], char **port, char **docroot, char **filename);
-
+void parse_arg(int argc, char *argv[], char **port, char **docroot, char **filename, int *portInt);
 
 /**
  * @brief Handles received signals to set a quit flag for terminating processes.
@@ -37,4 +34,4 @@ void handle_signal(int signal);
 static void usage(char *message);
 
 void handle_client(int client_sock, const char *doc_root, const char *index_file);
-void send_response(int client_sock, int status_code, const char *status_message, const char *content_type, const char *file_path);
+void send_response(FILE *stream, int status_code, char *fileWrite, const char *doc_root);

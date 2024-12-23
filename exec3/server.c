@@ -2,7 +2,7 @@
 
 char *myprog;
 volatile sig_atomic_t quit = 0;
-#define BUFFER_SIZE 1024
+
 /**
  * @details Signal handler to set a flag to terminate the main loop.
  * 
@@ -18,10 +18,11 @@ int main(int argc, char *argv[]){
     char *port="8080";
     char *filename="index.html";
     char *docRoot;
+    int portInt=8080;
 
-    parse_arg(argc, argv, &port, &docRoot, &filename);
-    //fprintf(stdout,"my docroot=%s\n" ,docRoot);
-    //fprintf(stdout,"my port is :%s and my filename=%s\n" ,port, filename);
+    parse_arg(argc, argv, &port, &docRoot, &filename, &portInt);
+    fprintf(stdout,"my docroot=%s\n" ,docRoot);
+    fprintf(stdout,"my port is :%s and my filename=%s\n" ,port, filename);
 
     struct sigaction sa = { .sa_handler = handle_signal };
     if(sigaction(SIGINT, &sa, NULL)==-1 || sigaction(SIGTERM, &sa, NULL)==-1){  
@@ -43,17 +44,12 @@ int main(int argc, char *argv[]){
     }
 
 
-    errno=0;
-    char *endptr;
-    long val = strtol(optarg, &endptr, 10);
-    if (errno != 0 ) {
-        usage("error in parsing strtol");
-    }
 
     struct sockaddr_in myaddr;
     memset(&myaddr, 0, sizeof(myaddr));
     myaddr.sin_family = AF_INET;
-    myaddr.sin_port = htons(val);
+    myaddr.sin_port = htons(portInt);
+
 
     if (bind(sockfd, (struct sockaddr *) &myaddr, sizeof(myaddr)) < 0){
         perror("error in bind");
@@ -65,7 +61,7 @@ int main(int argc, char *argv[]){
         exit(EXIT_FAILURE);
     }
 
-    //printf("Server listening on port %s\n", port);
+    printf("Server listening on port %s\n", port);
 
     while(!quit){
         int connfd = accept(sockfd, NULL, NULL);
@@ -77,93 +73,151 @@ int main(int argc, char *argv[]){
             exit(EXIT_FAILURE);
         }
         handle_client(connfd, docRoot, filename);
-        
-
         close(connfd);
     }
-    //printf("Server terminated.\n");
+    printf("Server terminated.\n");
     exit(EXIT_SUCCESS);
 }
 
-void send_response(int client_sock, int status_code, const char *status_message, const char *content_type, const char *file_path) {
-    char buffer[BUFFER_SIZE];
-    char date[128];
-    time_t now = time(NULL);
-    struct tm *gmt = gmtime(&now);
-    strftime(date, sizeof(date), "%a, %d %b %Y %H:%M:%S GMT", gmt);
+void send_response(FILE *stream, int status_code, char *fileWrite, const char *doc_root) {
+    
+    char outstr[200];
+    time_t t;
+    struct tm *tmp;
 
-    if (status_code == 200 && file_path) {
-        FILE *file = fopen(file_path, "rb");
-        if (!file) {
-            send_response(client_sock, 404, "Not Found", NULL, NULL);
-            return;
-        }
-        struct stat st;
-        stat(file_path, &st);
-        int content_length = st.st_size;
-
-        snprintf(buffer, sizeof(buffer), 
-                 "HTTP/1.1 200 OK\r\n"
-                 "Date: %s\r\n"
-                 "Content-Length: %d\r\n"
-                 "Connection: close\r\n\r\n", date, content_length);
-        send(client_sock, buffer, strlen(buffer), 0);
-
-        while ((content_length = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-            send(client_sock, buffer, content_length, 0);
-        }
-
-        fclose(file);
-    } else {
-        snprintf(buffer, sizeof(buffer), 
-                 "HTTP/1.1 %d %s\r\n"
-                 "Date: %s\r\n"
-                 "Connection: close\r\n\r\n", 
-                 status_code, status_message, date);
-        send(client_sock, buffer, strlen(buffer), 0);
+    t = time(NULL);
+    tmp = localtime(&t);
+    if (tmp == NULL) {
+        perror("localtime");
+        exit(EXIT_FAILURE);
     }
 
-    close(client_sock);
-}
+    if (strftime(outstr, sizeof(outstr), "%a, %d %b %C %H:%M:%S", tmp) == 0) {
+        fprintf(stderr, "strftime returned 0");
+        exit(EXIT_FAILURE);
+    }
 
+    
+    if (status_code == 200 && fileWrite != NULL) {
+
+        char *file_path=(char *)malloc(strlen(fileWrite) + strlen(doc_root) + 1);
+        strncpy(file_path, doc_root, strlen(doc_root));
+        strncat(file_path, fileWrite, strlen(fileWrite));
+
+        file_path[strlen(file_path)]='\0';
+
+        FILE *file = fopen(file_path, "r+");
+        if (file==NULL) {
+            send_response(stream, 404, NULL, NULL);
+            return;
+        }
+
+        fseek(file, 0L, SEEK_END);   
+        long int res = ftell(file); 
+        rewind(file);
+
+        fprintf(stream,"HTTP/1.1 200 OK\r\n");
+        fprintf(stream,"Date: %s\r\n", outstr);
+        fprintf(stream,"Content-Length: %ld\r\n", res);
+        fprintf(stream, "Connection: close\r\n\r\n");
+        fflush(stream);
+
+        char *line = NULL;
+        size_t len = 0;
+        ssize_t nread;
+        while ((nread = getline(&line, &len, file)) != -1) {
+            fwrite(line, nread, 1, stream);
+            fflush(stream);
+
+        }
+        fclose(file);
+        free(line);
+
+
+    } else {
+        char *message;
+        switch(status_code){
+            case 400: 
+                message="BAD REQUEST";
+                break;
+            case 501:
+                message="NOT IMPLEMENTED";
+                break;
+            case 404:
+                message="NOT FOUND";
+            default:
+                break;
+        }
+        fprintf(stream,"HTTP/1.1 %d %s\r\n", status_code, message);
+        fprintf(stream,"Date: %s\r\n", outstr);
+        fprintf(stream, "Connection: close\r\n\r\n");
+        fflush(stream);
+    }
+}
 void handle_client(int client_sock, const char *doc_root, const char *index_file) {
-    char buffer[BUFFER_SIZE];
-    if (recv(client_sock, buffer, sizeof(buffer) - 1, 0) <= 0) {
+    FILE *stream = fdopen(client_sock, "r+");
+    if (!stream) {
+        perror("fdopen failed");
         close(client_sock);
         return;
     }
 
-    char method[16], path[256], protocol[16];
-    if (sscanf(buffer, "%15s %255s %15s", method, path, protocol) != 3) {
-        send_response(client_sock, 400, "Bad Request", NULL, NULL);
-        return;
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t nread;
+    int status_code = 200;
+    char *method = NULL;
+    char *filename = NULL;
+    char *protocol = NULL;
+
+    // Read the first line (request line)
+    nread = getline(&line, &len, stream);
+    if (nread == -1) {
+        perror("getline failed");
+        status_code = 400;
+        goto cleanup;
     }
 
-    if (strcmp(method, "GET") != 0) {
-        send_response(client_sock, 501, "Not Implemented", NULL, NULL);
-        return;
+    // Parse the request line
+    method = strtok(line, " ");
+    filename = strtok(NULL, " ");
+    protocol = strtok(NULL, " ");
+
+    char *newFilename;
+    if (!method || strcmp(method, "GET") != 0) {
+        status_code = 501; // Not Implemented
+    } else if (!filename || strcmp(filename, "/") == 0) {
+        newFilename=(char*)malloc(strlen(index_file) + 2 );
+        strcpy(newFilename, "/");
+        strncat(newFilename, index_file, strlen(index_file));
+        newFilename[strlen(newFilename)]='\0';
+    } else if (!protocol || strncmp(protocol, "HTTP/1.1", 8) != 0) {
+        status_code = 400; // Bad Request
+    }
+    if(newFilename==NULL) newFilename=filename;
+    // Consume remaining headers
+
+    char *header_line = NULL;
+    while ((nread = getline(&header_line, &len, stream)) != -1) {
+        if (strcmp(header_line, "\r\n") == 0 || strcmp(header_line, "\n") == 0) {
+            break;
+        }
     }
 
-    if (strcmp(protocol, "HTTP/1.1") != 0) {
-        send_response(client_sock, 400, "Bad Request", NULL, NULL);
-        return;
+    if (nread == -1 && !feof(stream)) {
+        perror("getline failed while reading headers");
+        status_code = 400;
     }
 
-    char full_path[512];
-    snprintf(full_path, sizeof(full_path), "%s%s", doc_root, path);
+    // Send the response
+    send_response(stream, status_code, newFilename, doc_root);
 
-    if (full_path[strlen(full_path) - 1] == '/') {
-        strncat(full_path, index_file, sizeof(full_path) - strlen(full_path) - 1);
-    }
-
-    struct stat st;
-    if (stat(full_path, &st) != 0 || S_ISDIR(st.st_mode)) {
-        send_response(client_sock, 404, "Not Found", NULL, NULL);
-        return;
-    }
-
-    send_response(client_sock, 200, "OK", "text/html", full_path);
+cleanup:
+    free(line);
+    close(client_sock);
 }
+
+
 
 static void usage(char *message){
     fprintf(stderr,"my programm:%s , usage : server [-p PORT] [-i INDEX] DOC_ROOT : %s", myprog, message);
@@ -171,7 +225,7 @@ static void usage(char *message){
 }
 
 
-void parse_arg(int argc, char *argv[], char **port, char **docroot, char **filename){
+void parse_arg(int argc, char *argv[], char **port, char **docroot, char **filename, int *portInt){
     bool p_flag=false, i_flag=false;
     int opt;
     while((opt=getopt(argc, argv, "p:i:")) != -1){
@@ -189,6 +243,7 @@ void parse_arg(int argc, char *argv[], char **port, char **docroot, char **filen
             }
               
             *port=optarg;
+            *portInt=val;
             break;
         case 'i':
             if(i_flag){
