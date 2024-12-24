@@ -1,3 +1,10 @@
+/**
+ * @file server.h
+ * @brief Header file for the HTTP server module.
+ * @author Phillip - Sassmann
+ * @date 24.12.2024
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,5 +40,24 @@ void handle_signal(int signal);
  */
 static void usage(char *message);
 
+
+/**
+ * @brief Handles a client request.
+ * @details Reads the request from the client, parses it, and sends an appropriate HTTP response.
+ * 
+ * @param client_sock File descriptor for the connected client socket.
+ * @param doc_root Path to the document root directory.
+ * @param index_file Default file to serve when the root URL is requested.
+ */
 void handle_client(int client_sock, const char *doc_root, const char *index_file);
+
+/**
+ * @brief Sends an HTTP response to the client.
+ * @details Constructs an HTTP response based on the status code and requested file.
+ * 
+ * @param stream File stream for the client connection.
+ * @param status_code HTTP status code to send (e.g., 200, 404).
+ * @param fileWrite Relative path to the requested file.
+ * @param doc_root Path to the document root directory.
+ */
 void send_response(FILE *stream, int status_code, char *fileWrite, const char *doc_root);

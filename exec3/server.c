@@ -1,18 +1,40 @@
+
+/**
+ * @file server.c
+ * @brief Implementation of a basic HTTP server.
+ * @author Phillip Sassmann - 12207461
+ * @date 24.12.2024
+ */
+
+
 #include "server.h"
 
 char *myprog;
 volatile sig_atomic_t quit = 0;
 
+
 /**
- * @details Signal handler to set a flag to terminate the main loop.
+ * @brief Signal handler to terminate the main loop.
+ * @details Sets the quit flag to terminate the server gracefully when SIGINT or SIGTERM is received.
  * 
- * @param signal The signal number (e.g., SIGINT).
+ * @param signal The signal number.
  */
 void handle_signal(int signal) {
     quit = 1;
 }
 
 
+/**
+ * @brief Entry point for the HTTP server program.
+ * @details Initializes the server configuration, sets up signal handling, creates a listening socket,
+ *          and processes client requests in a loop until termination. The server can be terminated
+ *          gracefully with SIGINT or SIGTERM signals.
+ * 
+ * @param argc The number of command-line arguments.
+ * @param argv Array of command-line arguments. Expected arguments include optional flags for
+ *             port (-p) and index file (-i), followed by the document root.
+ * @return Returns 0 on successful termination, or exits with an error code on failure.
+ */
 int main(int argc, char *argv[]){
     myprog=argv[0];
     char *port="8080";
@@ -79,6 +101,16 @@ int main(int argc, char *argv[]){
     exit(EXIT_SUCCESS);
 }
 
+
+/**
+ * @brief Sends an HTTP response to the client.
+ * @details Constructs an HTTP response based on the status code and requested file.
+ * 
+ * @param stream File stream for the client connection.
+ * @param status_code HTTP status code to send (e.g., 200, 404).
+ * @param fileWrite Relative path to the requested file.
+ * @param doc_root Path to the document root directory.
+ */
 void send_response(FILE *stream, int status_code, char *fileWrite, const char *doc_root) {
     
     char outstr[200];
@@ -154,6 +186,15 @@ void send_response(FILE *stream, int status_code, char *fileWrite, const char *d
         fflush(stream);
     }
 }
+
+/**
+ * @brief Handles a client request.
+ * @details Reads the request from the client, parses it, and sends an appropriate HTTP response.
+ * 
+ * @param client_sock File descriptor for the connected client socket.
+ * @param doc_root Path to the document root directory.
+ * @param index_file Default file to serve when the root URL is requested.
+ */
 void handle_client(int client_sock, const char *doc_root, const char *index_file) {
     FILE *stream = fdopen(client_sock, "r+");
     if (!stream) {
@@ -184,16 +225,25 @@ void handle_client(int client_sock, const char *doc_root, const char *index_file
     protocol = strtok(NULL, " ");
 
     char *newFilename;
-    if (!method || strcmp(method, "GET") != 0) {
+    if (method==NULL || strcmp(method, "GET") != 0) {
         status_code = 501; // Not Implemented
-    } else if (!filename || strcmp(filename, "/") == 0) {
+    }
+    
+    if (filename==NULL){
+        status_code=400;
+    }
+
+    if (filename !=NULL && strcmp(filename, "/") == 0) {
         newFilename=(char*)malloc(strlen(index_file) + 2 );
         strcpy(newFilename, "/");
         strncat(newFilename, index_file, strlen(index_file));
         newFilename[strlen(newFilename)]='\0';
-    } else if (!protocol || strncmp(protocol, "HTTP/1.1", 8) != 0) {
+    }
+    
+    if (protocol==NULL || strncmp(protocol, "HTTP/1.1", 8) != 0) {
         status_code = 400; // Bad Request
     }
+
     if(newFilename==NULL) newFilename=filename;
     // Consume remaining headers
 
@@ -218,7 +268,14 @@ cleanup:
 }
 
 
-
+/**
+ * @brief Prints an error message and program usage information, then exits.
+ *
+ * @details Displays an error message indicating incorrect usage or arguments, then
+ * terminates the program.
+ *
+ * @param message Description of the encountered error.
+ */
 static void usage(char *message){
     fprintf(stderr,"my programm:%s , usage : server [-p PORT] [-i INDEX] DOC_ROOT : %s", myprog, message);
     exit(EXIT_FAILURE);

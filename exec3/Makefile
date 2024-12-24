@@ -7,12 +7,12 @@ CC = gcc
 FLAGS= -std=gnu99 -pedantic -Wall -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_SVID_SOURCE -D_POSIX_C_SOURCE=200809L -g
 LDFLAGS = -pthread
 
-.PHONY: all clean zipServer zipClient 
+.PHONY: all clean zipServer #zipClient 
 
-all:  server client
+all:  server #client
 
-client: client.o 
-	$(CC)  $(FLAGS) -o $@ $^ $(LDFLAGS)
+#client: client.o 
+#	$(CC)  $(FLAGS) -o $@ $^ $(LDFLAGS)
 
 server: server.o
 	$(CC)  $(FLAGS) -o $@ $^ $(LDFLAGS)
@@ -20,15 +20,15 @@ server: server.o
 %.o: %.c %.h
 	$(CC) $(FLAGS) -c -o $@ $<
 
-client.o: client.c client.h
+#client.o: client.c client.h
 server.o: server.c server.h
 
 
 clean:
 	rm -rf *.o client server ex3a.tar.gz ex3b.tar.gz
 
-zipClient:
-	tar -cvzf ex3a.tar.gz Makefile client.c client.h
+#zipClient:
+#	tar -cvzf ex3a.tar.gz Makefile client.c client.h
 
 zipServer:
 	tar -cvzf ex3b.tar.gz Makefile server.c server.h
